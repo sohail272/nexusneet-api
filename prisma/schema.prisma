@@ -6,20 +6,134 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Subject {
+  PHYSICS
+  CHEMISTRY
+  BOTANY
+  ZOOLOGY
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum TestStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum TestType {
+  CHAPTER
+  MOCK
+  CUSTOM
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+}
+
 model Question {
-  id           String   @id @default(uuid())
+  id           String      @id @default(uuid())
   questionText String
   explanation  String?
-  createdAt    DateTime @default(now())
+  subject      Subject
+  chapter      String
+  difficulty   Difficulty?
+  topic        String?
+  source       String?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
 
   options      Option[]
+  testLinks    TestQuestion[]
+  answers      AttemptAnswer[]
+
+  @@index([subject, chapter])
+  @@index([isActive])
+  @@index([createdAt])
 }
 
 model Option {
-  id         String   @id @default(uuid())
+  id         String        @id @default(uuid())
   text       String
-  isCorrect  Boolean  @default(false)
+  isCorrect  Boolean       @default(false)
 
-  question   Question @relation(fields: [questionId], references: [id])
+  question   Question      @relation(fields: [questionId], references: [id], onDelete: Cascade)
   questionId String
+
+  attemptAnswers AttemptAnswer[]
+}
+
+model Test {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  duration    Int?
+  status      TestStatus    @default(DRAFT)
+  type        TestType      @default(CUSTOM)
+  subject     Subject?
+  chapter     String?
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+
+  questions   TestQuestion[]
+  attempts    Attempt[]
+
+  @@index([status, type])
+  @@index([subject, chapter])
+}
+
+model TestQuestion {
+  id         String   @id @default(uuid())
+  testId     String
+  questionId String
+  createdAt  DateTime @default(now())
+
+  test       Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([testId, questionId])
+  @@index([testId])
+  @@index([questionId])
+}
+
+model Attempt {
+  id              String         @id @default(uuid())
+  testId           String
+  userId           String
+  status           AttemptStatus  @default(IN_PROGRESS)
+  startedAt        DateTime       @default(now())
+  submittedAt      DateTime?
+  score            Float          @default(0)
+  correctCount     Int            @default(0)
+  wrongCount       Int            @default(0)
+  unansweredCount  Int            @default(0)
+  timeTakenSeconds Int?
+  createdAt        DateTime       @default(now())
+
+  test             Test           @relation(fields: [testId], references: [id], onDelete: Cascade)
+  answers          AttemptAnswer[]
+
+  @@index([userId, createdAt])
+  @@index([testId, status])
+}
+
+model AttemptAnswer {
+  id               String   @id @default(uuid())
+  attemptId         String
+  questionId        String
+  selectedOptionId  String?
+  isCorrect         Boolean?
+  markedForReview   Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  attempt           Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question          Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOption    Option?  @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
 }
