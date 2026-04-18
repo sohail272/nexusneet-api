@@ -5,6 +5,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 
 import questionRoutes from "./modules/questions/question.routes";
+import testRoutes from "./modules/tests/test.routes";
+import attemptRoutes from "./modules/attempts/attempt.routes";
 
 dotenv.config();
 
@@ -15,12 +17,14 @@ app.use(cors());
 app.use(express.json());
 
 /* -------------------- HEALTH CHECK -------------------- */
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
   res.send("NexusNEET API running 🚀");
 });
 
 /* -------------------- ROUTES -------------------- */
 app.use("/questions", questionRoutes);
+app.use("/tests", testRoutes);
+app.use("/attempts", attemptRoutes);
 
 /* -------------------- SERVER -------------------- */
 const PORT = process.env.PORT || 5001;

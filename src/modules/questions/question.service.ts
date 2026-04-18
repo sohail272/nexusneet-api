@@ -1,19 +1,16 @@
 import { prisma } from "../../lib/prisma";
-
-type CreateQuestionInput = {
-  questionText: string;
-  explanation?: string;
-  options: {
-    text: string;
-    isCorrect: boolean;
-  }[];
-};
+import { CreateQuestionInput, QuestionFilters } from "./question.types";
 
 export const createQuestion = async (data: CreateQuestionInput) => {
-  const question = await prisma.question.create({
+  return prisma.question.create({
     data: {
       questionText: data.questionText,
       explanation: data.explanation,
+      subject: data.subject,
+      chapter: data.chapter,
+      difficulty: data.difficulty,
+      topic: data.topic,
+      source: data.source,
       options: {
         create: data.options,
       },
@@ -22,17 +19,52 @@ export const createQuestion = async (data: CreateQuestionInput) => {
       options: true,
     },
   });
-
-  return question;
 };
 
-export const getQuestions = async () => {
-  return prisma.question.findMany({
-    include: {
-      options: true,
+export const getQuestions = async (filters: QuestionFilters) => {
+  const page = filters.page ?? 1;
+  const limit = filters.limit ?? 20;
+  const skip = (page - 1) * limit;
+
+  const where = {
+    ...(filters.subject ? { subject: filters.subject } : {}),
+    ...(filters.chapter
+      ? { chapter: { equals: filters.chapter, mode: "insensitive" as const } }
+      : {}),
+    ...(filters.difficulty ? { difficulty: filters.difficulty } : {}),
+    ...(typeof filters.isActive === "boolean" ? { isActive: filters.isActive } : {}),
+    ...(filters.search
+      ? {
+          questionText: {
+            contains: filters.search,
+            mode: "insensitive" as const,
+          },
+        }
+      : {}),
+  };
+
+  const [items, total] = await prisma.$transaction([
+    prisma.question.findMany({
+      where,
+      include: {
+        options: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      skip,
+      take: limit,
+    }),
+    prisma.question.count({ where }),
+  ]);
+
+  return {
+    items,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
     },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+  };
 };
