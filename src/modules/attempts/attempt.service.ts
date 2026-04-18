@@ -1,7 +1,6 @@
 import { prisma } from "../../lib/prisma";
 
-const SCORE_FOR_CORRECT = 4;
-const SCORE_FOR_WRONG = -1;
+import { calculateAttemptSummary } from "./attempt.scoring";
 
 const getPublishedTestWithQuestions = async (testId: string) => {
   return prisma.test.findFirst({
@@ -122,29 +121,18 @@ export const submitAttempt = async (attemptId: string) => {
     throw new Error("Attempt is already submitted");
   }
 
-  let correctCount = 0;
-  let wrongCount = 0;
-  let unansweredCount = 0;
+  const summary = calculateAttemptSummary(
+    attempt.answers.map((answer) => ({
+      selectedOptionId: answer.selectedOptionId,
+      correctOptionId:
+        answer.question.options.find((option) => option.isCorrect)?.id ?? null,
+    })),
+  );
 
-  const answerUpdates = attempt.answers.map((answer) => {
-    if (!answer.selectedOptionId) {
-      unansweredCount += 1;
-      return { id: answer.id, isCorrect: null as boolean | null };
-    }
-
-    const correctOption = answer.question.options.find((option) => option.isCorrect);
-    const isCorrect = correctOption?.id === answer.selectedOptionId;
-
-    if (isCorrect) {
-      correctCount += 1;
-    } else {
-      wrongCount += 1;
-    }
-
-    return { id: answer.id, isCorrect };
-  });
-
-  const score = correctCount * SCORE_FOR_CORRECT + wrongCount * SCORE_FOR_WRONG;
+  const answerUpdates = attempt.answers.map((answer, index) => ({
+    id: answer.id,
+    isCorrect: summary.outcomes[index]?.isCorrect ?? null,
+  }));
   const timeTakenSeconds = Math.max(
     0,
     Math.floor((Date.now() - attempt.startedAt.getTime()) / 1000),
@@ -165,10 +153,10 @@ export const submitAttempt = async (attemptId: string) => {
       data: {
         status: "SUBMITTED",
         submittedAt: new Date(),
-        score,
-        correctCount,
-        wrongCount,
-        unansweredCount,
+        score: summary.score,
+        correctCount: summary.correctCount,
+        wrongCount: summary.wrongCount,
+        unansweredCount: summary.unansweredCount,
         timeTakenSeconds,
       },
       include: {
